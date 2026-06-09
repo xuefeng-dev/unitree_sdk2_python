@@ -1,0 +1,1 @@
+python3 tests/test_g1_arm_speed.py
