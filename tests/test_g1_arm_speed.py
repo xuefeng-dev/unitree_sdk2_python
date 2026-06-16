@@ -68,22 +68,39 @@ Kp[0:12] = [
 # Kp = [i*0 for i in Kp]  # disable all arms
 # Kd = [i*0 for i in Kd]  # disable all arms
 
-# loop_delay = 0.1
-loop_delay = 0.05
+loop_delay = 0.1
+# loop_delay = 0.05
 
 # 预备姿态角度（deg）
 angles_ready_deg = [1.7, -8.1, -2.0, 29.7, -45.4, 41.2, 0.6, -1.8, 17.2, 41.2, 58.2, -58.6, -1.3, -4.7, -3.4, 24.1, -0.6, 0.3, -28.5, -4.4, -4.1, -12.8, 7.8, 3.0, -4.3, 75.0, -1.3, 12.8, -14.0]
 # 出拳姿态角度（deg）
 angles_fist_deg = [4.1, 8.8, 42.1, 37.8, -36.4, -6.5, -5.3, -6.8, -4.8, 45.1, -42.1, 14.3, -0.0, -0.4, -2.4, -68.4, 12.3, 25.2, 52.7, 0.1, 18.8, 10.1, 7.8, -0.4, -4.2, 76.2, -1.4, 12.8, -14.0]
 
-# 预备
+# 右转腰
+angles_right_turn_deg = [2.1, -0.2, 23.4, 39.0, -41.1, 8.9, 5.6, -11.8, 14.1, 34.1, -37.5, 9.7, -70.0, -3.3, -3.0, -25.9, -1.1, -7.1, -5.6, 0.6, -0.1, 11.0, 3.6, -9.4, -21.6, -55.6, 5.4, 36.6, 6.9]
+# 左转腰
+angles_left_turn_deg = [-3.8, 10.5, 26.5, 41.1, -39.0, -6.2, -1.3, -1.7, 7.8, 34.1, -40.0, 4.0, 85.1, -4.9, -1.4, -4.5, 9.6, 24.0, -21.3, 0.8, 18.4, 0.1, -35.9, -10.5, 5.2, 23.1, 6.6, -6.1, -2.4]
 
-posture_angles_deg = [
-    angles_ready_deg,  # 预备
-    angles_fist_deg,   # 出拳
-]
 
+posture_pairs = {
+    # 挥拳
+    'boxing': [
+        angles_ready_deg,  # 预备
+        angles_fist_deg,   # 出拳
+    ],
+    # 转腰
+    'turn_waist': [
+        angles_right_turn_deg,  # 右转腰
+        angles_left_turn_deg,   # 左转腰
+    ],
+}
+
+# posture_pair_name = 'boxing'
+posture_pair_name = 'turn_waist'
+
+posture_angles_deg = posture_pairs[posture_pair_name]
 posture_angles_rad = []
+
 for angles_deg in posture_angles_deg:
     angles_rad = [x * np.pi / 180.0 for x in angles_deg]
     posture_angles_rad.append(angles_rad)
@@ -182,7 +199,7 @@ class Custom:
         log_dir = Path(__file__).resolve().parent.parent / "output"
         log_dir.mkdir(exist_ok=True)
         ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.csv_path_ = log_dir / f"g1_joint_data_{loop_delay}_{ts}.csv"
+        self.csv_path_ = log_dir / f"g1_joint_data_{posture_pair_name}_{loop_delay}_{ts}.csv"
         self.csv_file_ = open(self.csv_path_, "w", newline="")
         header = ["timestamp_s", "posture_mode"]
         for name in JOINT_NAMES:
