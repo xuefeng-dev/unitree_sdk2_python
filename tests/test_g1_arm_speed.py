@@ -19,6 +19,7 @@ import numpy as np
 
 G1_NUM_MOTOR = 29
 
+# 原始版本
 Kp = [
     60, 60, 60, 100, 40, 40,      # legs
     60, 60, 60, 100, 40, 40,      # legs
@@ -26,6 +27,7 @@ Kp = [
     40, 40, 40, 40,  40, 40, 40,  # arms
     40, 40, 40, 40,  40, 40, 40   # arms
 ]
+
 
 Kd = [
     1, 1, 1, 2, 1, 1,     # legs
@@ -40,6 +42,10 @@ Kp[0:12] = [
     0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0,
 ]
+
+Kp = [i*10 for i in Kp]
+Kd = [i*10 for i in Kd]
+
 
 # # 关闭所有关节的控制，调试代码阶段请不要注释掉下面两行，否则可能会有危险
 # Kp = [i*0 for i in Kp]  # disable all arms
@@ -200,12 +206,25 @@ class Custom:
             if self.posture_mode is None:
                 return
 
+            # 持续循环出拳（mode=11 是特殊模式，不是 posture_angles_rad 的下标）
+            if self.posture_mode == 11:
+                while True:
+                    with self.posture_mode_lock:
+                        if self.posture_mode != 11:
+                            break
+                    for model in [0, 1]:
+                        angles = posture_angles_rad[model]
+                        for i in range(G1_NUM_MOTOR):
+                            self.low_cmd.motor_cmd[i].q = angles[i]
+                        time.sleep(0.05)
+                        self.low_cmd.crc = self.crc.Crc(self.low_cmd)
+                        self.lowcmd_publisher_.Write(self.low_cmd)
+                return
+
             with self.posture_mode_lock:
                 angles = posture_angles_rad[self.posture_mode]
                 for i in range(G1_NUM_MOTOR):
                     self.low_cmd.motor_cmd[i].q = angles[i]
-
-                
 
         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
         self.lowcmd_publisher_.Write(self.low_cmd)
@@ -231,7 +250,7 @@ if __name__ == '__main__':
     custom.Init()
     custom.Start()
 
-    print("Keyboard: 'j'=ready posture, 'k'=fist posture, 'o'=quit")
+    print("Keyboard: 'j'=ready posture, 'k'=fist posture, 'l'=continuous fist, 'o'=quit")
     old_tty = termios.tcgetattr(sys.stdin)
     tty.setcbreak(sys.stdin.fileno())
     try:
@@ -246,6 +265,9 @@ if __name__ == '__main__':
             elif key == 'k':
                 custom.SetPostureMode(1)
                 print("posture_mode=1 (fist)")
+            elif key == 'l':
+                custom.SetPostureMode(11)
+                print("posture_mode=11 (continuous fist)")
             time.sleep(0.05)
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
