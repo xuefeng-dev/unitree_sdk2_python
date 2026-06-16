@@ -1,9 +1,12 @@
+import csv
 import time
 import sys
 import select
 import termios
 import tty
 import threading
+from datetime import datetime
+from pathlib import Path
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelFactoryInitialize
 from unitree_sdk2py.core.channel import ChannelSubscriber, ChannelFactoryInitialize
@@ -18,6 +21,18 @@ from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwi
 import numpy as np
 
 G1_NUM_MOTOR = 29
+
+JOINT_NAMES = [
+    "LeftHipPitch", "LeftHipRoll", "LeftHipYaw", "LeftKnee",
+    "LeftAnklePitch", "LeftAnkleRoll",
+    "RightHipPitch", "RightHipRoll", "RightHipYaw", "RightKnee",
+    "RightAnklePitch", "RightAnkleRoll",
+    "WaistYaw", "WaistRoll", "WaistPitch",
+    "LeftShoulderPitch", "LeftShoulderRoll", "LeftShoulderYaw",
+    "LeftElbow", "LeftWristRoll", "LeftWristPitch", "LeftWristYaw",
+    "RightShoulderPitch", "RightShoulderRoll", "RightShoulderYaw",
+    "RightElbow", "RightWristRoll", "RightWristPitch", "RightWristYaw",
+]
 
 # 原始版本
 Kp = [
@@ -37,27 +52,31 @@ Kd = [
     1, 1, 1, 1, 1, 1, 1   # arms 
 ]
 
+
+
+Kp = [i*10 for i in Kp]
+Kd = [i*10 for i in Kd]
+
+
 #  腿部进入阻尼模式
 Kp[0:12] = [
     0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0,
 ]
 
-Kp = [i*10 for i in Kp]
-Kd = [i*10 for i in Kd]
-
-
 # # 关闭所有关节的控制，调试代码阶段请不要注释掉下面两行，否则可能会有危险
 # Kp = [i*0 for i in Kp]  # disable all arms
 # Kd = [i*0 for i in Kd]  # disable all arms
 
+# loop_delay = 0.1
+loop_delay = 0.05
 
 # 预备姿态角度（deg）
 angles_ready_deg = [1.7, -8.1, -2.0, 29.7, -45.4, 41.2, 0.6, -1.8, 17.2, 41.2, 58.2, -58.6, -1.3, -4.7, -3.4, 24.1, -0.6, 0.3, -28.5, -4.4, -4.1, -12.8, 7.8, 3.0, -4.3, 75.0, -1.3, 12.8, -14.0]
-
-
 # 出拳姿态角度（deg）
 angles_fist_deg = [4.1, 8.8, 42.1, 37.8, -36.4, -6.5, -5.3, -6.8, -4.8, 45.1, -42.1, 14.3, -0.0, -0.4, -2.4, -68.4, 12.3, 25.2, 52.7, 0.1, 18.8, 10.1, 7.8, -0.4, -4.2, 76.2, -1.4, 12.8, -14.0]
+
+# 预备
 
 posture_angles_deg = [
     angles_ready_deg,  # 预备
@@ -128,6 +147,11 @@ class Custom:
         self.joint_angles_init = None
         self.posture_mode = None
         self.posture_mode_lock = threading.Lock()
+        self.csv_file_ = None
+        self.csv_writer_ = None
+        self.csv_lock_ = threading.Lock()
+        self.csv_path_ = None
+        self.start_time_ = None
 
     def SetPostureMode(self, mode):
         with self.posture_mode_lock:
@@ -148,9 +172,47 @@ class Custom:
         self.lowcmd_publisher_ = ChannelPublisher("rt/lowcmd", LowCmd_)
         self.lowcmd_publisher_.Init()
 
-        # create subscriber # 
+        self._InitCsvLog()
+
+        # create subscriber #
         self.lowstate_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
         self.lowstate_subscriber.Init(self.LowStateHandler, 10)
+
+    def _InitCsvLog(self):
+        log_dir = Path(__file__).resolve().parent.parent / "output"
+        log_dir.mkdir(exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.csv_path_ = log_dir / f"g1_joint_data_{loop_delay}_{ts}.csv"
+        self.csv_file_ = open(self.csv_path_, "w", newline="")
+        header = ["timestamp_s", "posture_mode"]
+        for name in JOINT_NAMES:
+            header.extend([f"{name}_dq", f"{name}_tau"])
+        self.csv_writer_ = csv.writer(self.csv_file_)
+        self.csv_writer_.writerow(header)
+        self.csv_file_.flush()
+        self.start_time_ = time.time()
+        print(f"Logging joint velocity/torque to: {self.csv_path_}")
+
+    def _WriteCsvRow(self, msg: LowState_):
+        if self.csv_writer_ is None or self.start_time_ is None:
+            return
+        row = [time.time() - self.start_time_]
+        with self.posture_mode_lock:
+            row.append(
+                self.posture_mode if self.posture_mode is not None else -1
+            )
+        for i in range(G1_NUM_MOTOR):
+            ms = msg.motor_state[i]
+            row.extend([ms.dq, ms.tau_est])
+        with self.csv_lock_:
+            self.csv_writer_.writerow(row)
+            self.csv_file_.flush()
+
+    def CloseCsv(self):
+        if self.csv_file_ is not None:
+            self.csv_file_.close()
+            self.csv_file_ = None
+            print(f"CSV log saved: {self.csv_path_}")
 
     def Start(self):
         self.lowCmdWriteThreadPtr = RecurrentThread(
@@ -164,6 +226,7 @@ class Custom:
 
     def LowStateHandler(self, msg: LowState_):
         self.low_state = msg
+        self._WriteCsvRow(msg)
 
         if self.update_mode_machine_ == False:
             self.mode_machine_ = self.low_state.mode_machine
@@ -216,7 +279,7 @@ class Custom:
                         angles = posture_angles_rad[model]
                         for i in range(G1_NUM_MOTOR):
                             self.low_cmd.motor_cmd[i].q = angles[i]
-                        time.sleep(0.05)
+                        time.sleep(loop_delay)
                         self.low_cmd.crc = self.crc.Crc(self.low_cmd)
                         self.lowcmd_publisher_.Write(self.low_cmd)
                 return
@@ -271,3 +334,4 @@ if __name__ == '__main__':
             time.sleep(0.05)
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_tty)
+        custom.CloseCsv()
