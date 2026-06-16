@@ -58,18 +58,21 @@ Kp = [i*10 for i in Kp]
 Kd = [i*10 for i in Kd]
 
 
-#  腿部进入阻尼模式
-Kp[0:12] = [
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0,
-]
-
 # # 关闭所有关节的控制，调试代码阶段请不要注释掉下面两行，否则可能会有危险
 # Kp = [i*0 for i in Kp]  # disable all arms
 # Kd = [i*0 for i in Kd]  # disable all arms
 
-loop_delay = 0.1
+## 挥拳
+# loop_delay = 0.1
 # loop_delay = 0.05
+
+# 转腰
+# loop_delay = 0.5
+# loop_delay = 0.25
+
+# 踢腿
+loop_delay = 0.5
+# loop_delay = 0.25
 
 # 预备姿态角度（deg）
 angles_ready_deg = [1.7, -8.1, -2.0, 29.7, -45.4, 41.2, 0.6, -1.8, 17.2, 41.2, 58.2, -58.6, -1.3, -4.7, -3.4, 24.1, -0.6, 0.3, -28.5, -4.4, -4.1, -12.8, 7.8, 3.0, -4.3, 75.0, -1.3, 12.8, -14.0]
@@ -82,6 +85,12 @@ angles_right_turn_deg = [2.1, -0.2, 23.4, 39.0, -41.1, 8.9, 5.6, -11.8, 14.1, 34
 angles_left_turn_deg = [-3.8, 10.5, 26.5, 41.1, -39.0, -6.2, -1.3, -1.7, 7.8, 34.1, -40.0, 4.0, 85.1, -4.9, -1.4, -4.5, 9.6, 24.0, -21.3, 0.8, 18.4, 0.1, -35.9, -10.5, 5.2, 23.1, 6.6, -6.1, -2.4]
 
 
+# 踢腿踢出
+angles_kick_out_deg = [15.6, 10.7, -1.8, -3.3, 10.5, 9.6, -77.5, -8.9, -1.4, -5.1, 28.3, 1.6, -2.9, 9.7, 12.0, 5.3, -1.8, 9.0, 78.8, 1.8, 3.6, 3.9, 5.6, -25.7, -18.0, 68.1, -0.2, 5.4, -9.9]
+
+# 踢腿归位
+angles_kick_back_deg = [1.1, -0.2, -0.3, -0.0, 0.2, 0.1, -0.3, 0.2, -0.0, 0.1, 0.5, 0.0, 0.1, -2.0, -2.3, 7.1, 1.2, 2.7, 56.5, 0.2, 10.6, 0.2, 7.8, -20.2, -8.2, 55.9, -0.2, 10.4, -0.3]
+
 posture_pairs = {
     # 挥拳
     'boxing': [
@@ -93,10 +102,23 @@ posture_pairs = {
         angles_right_turn_deg,  # 右转腰
         angles_left_turn_deg,   # 左转腰
     ],
+    # 踢腿
+    'kick': [
+        angles_kick_back_deg,  # 踢腿预备
+        angles_kick_out_deg,  # 踢腿踢出
+    ],
 }
 
-# posture_pair_name = 'boxing'
-posture_pair_name = 'turn_waist'
+posture_pair_name = 'boxing'
+# posture_pair_name = 'turn_waist'
+# posture_pair_name = 'kick'
+
+if posture_pair_name == 'boxing':
+    #  腿部进入阻尼模式
+    Kp[0:12] = [
+        0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
+    ]
 
 posture_angles_deg = posture_pairs[posture_pair_name]
 posture_angles_rad = []
